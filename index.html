@@ -33,20 +33,19 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.05);
         }
         
-        /* The header logo */
         .logo-img { height: 90px; margin-bottom: 10px; object-fit: contain; }
-
         .header-title { margin: 0; font-size: 26px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; }
         .text-navy { color: var(--doc-navy); }
         .text-green { color: var(--doc-green); }
 
         #calendar-card { background: white; padding: 15px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
         
+        /* Calendar Buttons */
         .fc-toolbar-title { color: var(--doc-navy) !important; font-weight: 700; font-size: 1.1em !important; }
         .fc-button-primary { background-color: var(--doc-navy) !important; border: none !important; }
         .fc-button-primary:hover { background-color: var(--doc-green) !important; }
 
-        /* Appointment "Bubble" Styling */
+        /* Appointment Styling */
         .fc-event { 
             cursor: pointer; padding: 5px !important; border: none !important;
             background-color: var(--doc-navy) !important;
@@ -58,7 +57,7 @@
         .event-name { font-weight: bold; display: block; text-transform: uppercase; font-size: 0.85em; }
         .event-time { font-weight: normal; opacity: 0.9; font-size: 0.75em; }
 
-        /* Booking Form Popup */
+        /* Modal / Form */
         #booking-modal { 
             display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 90%; max-width: 400px; background: white; padding: 25px; z-index: 100;
@@ -117,10 +116,9 @@
     <script>
         let calendar;
         let selectedDateStr;
-        const STORAGE_KEY = 'doc_appointment_system';
+        const STORAGE_KEY = 'doc_appointment_system_v3'; 
         let appointments = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
 
-        // Fill the time selects with hours (7am to 7pm)
         function populateTimes() {
             const startSelect = document.getElementById('start-time');
             const endSelect = document.getElementById('end-time');
@@ -143,7 +141,6 @@
                 headerToolbar: { left: 'prev,next today', center: 'title', right: '' },
                 height: 'auto',
                 events: appointments,
-                // Custom event rendering to show Name over Time
                 eventContent: function(arg) {
                     let stack = document.createElement('div');
                     stack.className = 'event-title-stack';
@@ -151,14 +148,16 @@
                     return { domNodes: [stack] };
                 },
                 dateClick: function(info) { openModal(info.dateStr); },
-                // Deletion logic with proper storage update
                 eventClick: function(info) {
-                    const notes = info.event.extendedProps.notes || "No notes";
-                    if(confirm(`PATIENT: ${info.event.title}\nNOTES: ${notes}\n\nDelete this appointment?`)) {
+                    const eventId = info.event.id;
+                    const patientName = info.event.title;
+                    
+                    if(confirm(`Delete appointment for ${patientName}?`)) {
+                        // 1. Remove from UI
                         info.event.remove();
-                        appointments = appointments.filter(e => {
-                            return !(e.title === info.event.title && e.start === info.event.startStr);
-                        });
+                        // 2. Remove from Storage array using Unique ID
+                        appointments = appointments.filter(app => app.id !== eventId);
+                        // 3. Save updated array
                         localStorage.setItem(STORAGE_KEY, JSON.stringify(appointments));
                     }
                 }
@@ -180,7 +179,11 @@
             const notes = document.getElementById('notes').value;
             if(!name) { alert("Enter patient name"); return; }
             
+            // Create Unique ID
+            const uniqueId = 'appt-' + Date.now();
+
             const newEvent = {
+                id: uniqueId,
                 title: name,
                 start: `${selectedDateStr}T${startTime}:00`,
                 end: `${selectedDateStr}T${endTime}:00`,
@@ -192,6 +195,8 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(appointments));
             calendar.addEvent(newEvent);
             closeModal();
+            
+            // Reset fields
             document.getElementById('patient-name').value = "";
             document.getElementById('notes').value = "";
         }
