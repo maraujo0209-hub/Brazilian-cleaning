@@ -1,10 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="icon" type="image/png" href="Doctors appointment logo.png">
-    <link rel="apple-touch-icon" href="Doctors appointment logo.png">
+    <meta name="apple-mobile-web-app-title" content="Doctor's Appointment">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" href="apple-touch-icon.png">
+    
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Doctor's Appointment | Admin</title>
     
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css">
@@ -28,6 +33,7 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.05);
         }
         
+        /* The header logo */
         .logo-img { height: 90px; margin-bottom: 10px; object-fit: contain; }
 
         .header-title { margin: 0; font-size: 26px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; }
@@ -36,10 +42,11 @@
 
         #calendar-card { background: white; padding: 15px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
         
-        .fc-toolbar-title { color: var(--doc-navy) !important; font-weight: 700; }
+        .fc-toolbar-title { color: var(--doc-navy) !important; font-weight: 700; font-size: 1.1em !important; }
         .fc-button-primary { background-color: var(--doc-navy) !important; border: none !important; }
         .fc-button-primary:hover { background-color: var(--doc-green) !important; }
 
+        /* Appointment "Bubble" Styling */
         .fc-event { 
             cursor: pointer; padding: 5px !important; border: none !important;
             background-color: var(--doc-navy) !important;
@@ -51,6 +58,7 @@
         .event-name { font-weight: bold; display: block; text-transform: uppercase; font-size: 0.85em; }
         .event-time { font-weight: normal; opacity: 0.9; font-size: 0.75em; }
 
+        /* Booking Form Popup */
         #booking-modal { 
             display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 90%; max-width: 400px; background: white; padding: 25px; z-index: 100;
@@ -69,7 +77,7 @@
 <body>
 
     <header>
-        <img src="Doctors appointment logo.png" alt="Logo" class="logo-img">
+        <img src="apple-touch-icon.png" alt="Logo" class="logo-img">
         <h1 class="header-title">
             <span class="text-navy">DOCTOR'S</span> 
             <span class="text-green">APPOINTMENT</span>
@@ -109,10 +117,10 @@
     <script>
         let calendar;
         let selectedDateStr;
-        // THE FIX: Using one consistent key for all data
         const STORAGE_KEY = 'doc_appointment_system';
         let appointments = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
 
+        // Fill the time selects with hours (7am to 7pm)
         function populateTimes() {
             const startSelect = document.getElementById('start-time');
             const endSelect = document.getElementById('end-time');
@@ -135,6 +143,7 @@
                 headerToolbar: { left: 'prev,next today', center: 'title', right: '' },
                 height: 'auto',
                 events: appointments,
+                // Custom event rendering to show Name over Time
                 eventContent: function(arg) {
                     let stack = document.createElement('div');
                     stack.className = 'event-title-stack';
@@ -142,23 +151,15 @@
                     return { domNodes: [stack] };
                 },
                 dateClick: function(info) { openModal(info.dateStr); },
+                // Deletion logic with proper storage update
                 eventClick: function(info) {
                     const notes = info.event.extendedProps.notes || "No notes";
                     if(confirm(`PATIENT: ${info.event.title}\nNOTES: ${notes}\n\nDelete this appointment?`)) {
-                        
-                        // 1. Remove from the visual calendar
                         info.event.remove();
-
-                        // 2. Remove from the appointments array
-                        // We filter by comparing name AND start time to ensure we delete the right one
                         appointments = appointments.filter(e => {
                             return !(e.title === info.event.title && e.start === info.event.startStr);
                         });
-
-                        // 3. Update the storage permanently
                         localStorage.setItem(STORAGE_KEY, JSON.stringify(appointments));
-                        
-                        console.log("Appointment deleted. Remaining:", appointments.length);
                     }
                 }
             });
