@@ -19,6 +19,7 @@
         :root { 
             --doc-navy: #1A3668; 
             --doc-green: #4D9345;
+            --doc-red: #D9383A;
         }
 
         body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; background: #f0f4f7; margin: 0; padding: 10px; }
@@ -69,7 +70,9 @@
         label { display: block; font-size: 11px; color: var(--doc-navy); margin-bottom: 5px; font-weight: bold; }
         input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ced4da; border-radius: 10px; font-size: 16px; box-sizing: border-box; }
         
-        .save-btn { background: var(--doc-green); color: white; border: none; width: 100%; padding: 15px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; }
+        .button-group { display: flex; gap: 10px; margin-top: 10px; }
+        .save-btn { background: var(--doc-green); color: white; border: none; flex: 2; padding: 15px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; }
+        .delete-btn { background: var(--doc-red); color: white; border: none; flex: 1; padding: 15px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; display: none; }
         .close-btn { background: transparent; color: #888; margin-top: 10px; border: none; width: 100%; padding: 10px; cursor: pointer; text-decoration: underline; }
     </style>
 </head>
@@ -109,15 +112,26 @@
             <label>NOTES / REASON</label>
             <textarea id="notes" rows="3" placeholder="Visit details..."></textarea>
         </div>
-        <button class="save-btn" onclick="saveAppointment()">CONFIRM APPOINTMENT</button>
+        <div class="button-group">
+            <button id="modal-delete-btn" class="delete-btn" onclick="deleteAppointment()">DELETE</button>
+            <button class="save-btn" onclick="saveAppointment()">CONFIRM APPOINTMENT</button>
+        </div>
         <button class="close-btn" onclick="closeModal()">CANCEL</button>
     </div>
 
     <script>
         let calendar;
         let selectedDateStr;
+        let editingEventId = null;
         const STORAGE_KEY = 'doc_appointment_system_v3'; 
         let appointments = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+
+        // Self-Healing database tracking: assign IDs to legacy events instantly
+        appointments = appointments.map(appt => {
+            if (!appt.id) appt.id = 'appt-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+            return appt;
+        });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appointments));
 
         function populateTimes() {
             const startSelect = document.getElementById('start-time');
@@ -148,26 +162,43 @@
                     return { domNodes: [stack] };
                 },
                 dateClick: function(info) { openModal(info.dateStr); },
-                eventClick: function(info) {
-                    const eventId = info.event.id;
-                    const patientName = info.event.title;
-                    
-                    if(confirm(`Delete appointment for ${patientName}?`)) {
-                        // 1. Remove from UI
-                        info.event.remove();
-                        // 2. Remove from Storage array using Unique ID
-                        appointments = appointments.filter(app => app.id !== eventId);
-                        // 3. Save updated array
-                        localStorage.setItem(STORAGE_KEY, JSON.stringify(appointments));
-                    }
-                }
+                eventClick: function(info) { openModal(null, info.event); }
             });
             calendar.render();
         });
 
-        function openModal(date) {
-            selectedDateStr = date;
-            document.getElementById('selected-date-display').innerText = "Schedule: " + date;
+        function openModal(date, event = null) {
+            const deleteBtn = document.getElementById('modal-delete-btn');
+            
+            if (event) {
+                // Editing an existing appt
+                editingEventId = event.id || appointments.find(a => a.title === event.title && a.start === event.startStr)?.id;
+                selectedDateStr = event.startStr.split('T')[0];
+                
+                document.getElementById('selected-date-display').innerText = "Edit Appointment";
+                document.getElementById('patient-name').value = event.title;
+                document.getElementById('notes').value = event.extendedProps.notes || "";
+                
+                if (event.startStr.includes('T')) {
+                    document.getElementById('start-time').value = event.startStr.split('T')[1].substring(0, 5);
+                }
+                if (event.endStr && event.endStr.includes('T')) {
+                    document.getElementById('end-time').value = event.endStr.split('T')[1].substring(0, 5);
+                }
+                
+                deleteBtn.style.display = 'block'; 
+            } else {
+                // New fresh entry setup
+                editingEventId = null;
+                selectedDateStr = date;
+                
+                document.getElementById('selected-date-display').innerText = "Schedule: " + date;
+                document.getElementById('patient-name').value = "";
+                document.getElementById('notes').value = "";
+                
+                deleteBtn.style.display = 'none'; 
+            }
+            
             document.getElementById('booking-modal').style.display = 'block';
             document.getElementById('overlay').style.display = 'block';
         }
@@ -179,31 +210,80 @@
             const notes = document.getElementById('notes').value;
             if(!name) { alert("Enter patient name"); return; }
             
-            // Create Unique ID
-            const uniqueId = 'appt-' + Date.now();
+            const startIso = `${selectedDateStr}T${startTime}:00`;
+            const endIso = `${selectedDateStr}T${endTime}:00`;
 
-            const newEvent = {
-                id: uniqueId,
-                title: name,
-                start: `${selectedDateStr}T${startTime}:00`,
-                end: `${selectedDateStr}T${endTime}:00`,
-                extendedProps: { notes: notes },
-                allDay: false
-            };
+            if (editingEventId) {
+                // Update local storage data values
+                appointments = appointments.map(appt => {
+                    if (appt.id === editingEventId) {
+                        return { ...appt, title: name, start: startIso, end: endIso, extendedProps: { notes: notes } };
+                    }
+                    return appt;
+                });
+                
+                // Redraw UI indicators directly
+                const calendarEvent = calendar.getEventById(editingEventId);
+                if (calendarEvent) {
+                    calendarEvent.setProp('title', name);
+                    calendarEvent.setStart(startIso);
+                    calendarEvent.setEnd(endIso);
+                    calendarEvent.setExtendedProp('notes', notes);
+                } else {
+                    calendar.refetchEvents();
+                }
+            } else {
+                const uniqueId = 'appt-' + Date.now();
+                const newEvent = {
+                    id: uniqueId,
+                    title: name,
+                    start: startIso,
+                    end: endIso,
+                    extendedProps: { notes: notes },
+                    allDay: false
+                };
 
-            appointments.push(newEvent);
+                appointments.push(newEvent);
+                calendar.addEvent(newEvent);
+            }
+
             localStorage.setItem(STORAGE_KEY, JSON.stringify(appointments));
-            calendar.addEvent(newEvent);
             closeModal();
+        }
+
+        function deleteAppointment() {
+            if (!editingEventId) return;
             
-            // Reset fields
-            document.getElementById('patient-name').value = "";
-            document.getElementById('notes').value = "";
+            if (confirm("Are you sure you want to permanently delete this appointment?")) {
+                const targetMatch = appointments.find(appt => appt.id === editingEventId);
+
+                // Filter out item from data framework
+                appointments = appointments.filter(appt => appt.id !== editingEventId);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(appointments));
+                
+                // Clear out of visual display
+                let calendarEvent = calendar.getEventById(editingEventId);
+                
+                // Safety lookup matrix
+                if (!calendarEvent && targetMatch) {
+                    calendarEvent = calendar.getEvents().find(e => 
+                        e.title === targetMatch.title && 
+                        e.startStr === targetMatch.start
+                    );
+                }
+                
+                if (calendarEvent) {
+                    calendarEvent.remove();
+                }
+
+                closeModal();
+            }
         }
 
         function closeModal() {
             document.getElementById('booking-modal').style.display = 'none';
             document.getElementById('overlay').style.display = 'none';
+            editingEventId = null;
         }
     </script>
 </body>
