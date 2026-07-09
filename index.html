@@ -136,14 +136,29 @@
         function populateTimes() {
             const startSelect = document.getElementById('start-time');
             const endSelect = document.getElementById('end-time');
-            for(let i=7; i<=19; i++) {
-                let h = i > 12 ? i-12 : i;
-                let ampm = i >= 12 ? 'PM' : 'AM';
-                let display = `${h}:00 ${ampm}`;
-                let value = i < 10 ? `0${i}:00` : `${i}:00`;
-                startSelect.add(new Option(display, value));
-                endSelect.add(new Option(display, value));
+            
+            // Loop through hours from 7 AM to 7 PM (up to 8 PM end time options)
+            for(let hour = 7; hour <= 19; hour++) {
+                // Loop through 15-minute increments
+                for(let min = 0; min < 60; min += 15) {
+                    let displayHour = hour > 12 ? hour - 12 : hour;
+                    let ampm = hour >= 12 ? 'PM' : 'AM';
+                    let displayMin = min === 0 ? '00' : min;
+                    
+                    let displayStr = `${displayHour}:${displayMin} ${ampm}`;
+                    
+                    let padHour = hour < 10 ? `0${hour}` : `${hour}`;
+                    let padMin = min === 0 ? '00' : min;
+                    let valueStr = `${padHour}:${padMin}`;
+                    
+                    startSelect.add(new Option(displayStr, valueStr));
+                    endSelect.add(new Option(displayStr, valueStr));
+                }
             }
+            // Add a final 8:00 PM closing block option to end options selection matrix
+            endSelect.add(new Option("8:00 PM", "20:00"));
+            
+            // Set default end time to be the second option (15 minutes after start)
             endSelect.selectedIndex = 1;
         }
         populateTimes();
